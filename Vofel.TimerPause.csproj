@@ -48,11 +48,6 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Include="Properties\Settings.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTimeSharedInput>True</DesignTimeSharedInput>
-      <DependentUpon>Settings.settings</DependentUpon>
-    </Compile>
     <Compile Include="UI\Components\TimerPauseComponent.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="UI\Components\TimerPauseFactory.cs" />
@@ -84,10 +79,6 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
-      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
-    </None>
     <None Include="src\GitHub-Mark-16px.png" />
   </ItemGroup>
   <ItemGroup>
