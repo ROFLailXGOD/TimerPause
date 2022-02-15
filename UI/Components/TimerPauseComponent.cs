@@ -105,7 +105,7 @@ namespace LiveSplit.UI.Components
 
         protected void State_OnUndoSplit(object sender, EventArgs e)
         {
-            ISegment nextSplit = State.Run[State.CurrentSplitIndex + 1];
+            ISegment nextSplit = State.Run[State.CurrentSplitIndex];
             nextSplit.PersonalBestSplitTime = new Time();
         }
     }
