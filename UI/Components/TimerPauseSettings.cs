@@ -29,7 +29,7 @@ namespace LiveSplit.UI.Components
 
         private void lblYouTube_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            System.Diagnostics.Process.Start("https://www.youtube.com/user/zazaza691");
+            System.Diagnostics.Process.Start("https://youtu.be/2Mbf-s2h6vk");
         }
 
         private void lblTwitch_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)

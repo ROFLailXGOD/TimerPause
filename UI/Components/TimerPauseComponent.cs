@@ -30,6 +30,7 @@ namespace LiveSplit.UI.Components
             State.OnSkipSplit += State_OnSkipSplit;
             State.OnPause += State_OnPause;
             State.OnSplit += State_OnSplit;
+            State.OnUndoSplit += State_OnUndoSplit;
         }
 
         public override void Dispose()
@@ -38,6 +39,7 @@ namespace LiveSplit.UI.Components
             State.OnSkipSplit -= State_OnSkipSplit;
             State.OnPause -= State_OnPause;
             State.OnSplit -= State_OnSplit;
+            State.OnUndoSplit -= State_OnUndoSplit;
         }
 
         public override void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode) { }
@@ -99,6 +101,12 @@ namespace LiveSplit.UI.Components
         {
             ISegment previousSplit = State.Run[State.CurrentSplitIndex - 1];
             previousSplit.PersonalBestSplitTime = previousSplit.SplitTime;
+        }
+
+        protected void State_OnUndoSplit(object sender, EventArgs e)
+        {
+            ISegment nextSplit = State.Run[State.CurrentSplitIndex + 1];
+            nextSplit.PersonalBestSplitTime = new Time();
         }
     }
 }
