@@ -9,37 +9,37 @@ namespace LiveSplit.UI.Components
     {
 
         public override string ComponentName => "Timer Pause";
-
         public bool Activated { get; set; }
 
-        private bool IsSplitting { get; set; }
-        private int SplitCounter { get; set; }
-
-        private LiveSplitState State { get; set; }
         private TimerPauseSettings Settings { get; set; }
-        private TimerModel Timer { get; set; }
+        private LiveSplitState State { get; set; }
+        private TimerModel Model { get; set; }
+        private Time TimeAccumulator { get; set; }
+        private int CurrentSplitIndex { get; set; }  // keeping track manually, because it's lost after a reset
+        private int? MarkerIndex { get; set; }
         public TimerPauseComponent(LiveSplitState state)
         {
             Activated = true;
 
             State = state;
             Settings = new TimerPauseSettings();
-            Timer = new TimerModel() { CurrentState = State };
+            Model = new TimerModel() { CurrentState = State };
+            TimeAccumulator = Time.Zero;
 
             State.OnStart += State_OnStart;
-            State.OnSkipSplit += State_OnSkipSplit;
-            State.OnPause += State_OnPause;
             State.OnSplit += State_OnSplit;
+            State.OnSkipSplit += State_OnSkipSplit;
             State.OnUndoSplit += State_OnUndoSplit;
+            State.OnReset += State_OnReset;
         }
 
         public override void Dispose()
         {
             State.OnStart -= State_OnStart;
-            State.OnSkipSplit -= State_OnSkipSplit;
-            State.OnPause -= State_OnPause;
             State.OnSplit -= State_OnSplit;
+            State.OnSkipSplit -= State_OnSkipSplit;
             State.OnUndoSplit -= State_OnUndoSplit;
+            State.OnReset -= State_OnReset;
         }
 
         public override void Update(IInvalidator invalidator, LiveSplitState state, float width, float height, LayoutMode mode) { }
@@ -61,52 +61,100 @@ namespace LiveSplit.UI.Components
 
         private void State_OnStart(object sender, EventArgs e)
         {
-            for (int i = State.Run.Count - 1; i >= 0; --i)
+            CurrentSplitIndex = State.CurrentSplitIndex;
+            int numSplits = State.Run.Count;
+            // if we don't have any splits or history => do nothing
+            if (numSplits == 0 || State.Run.AttemptHistory.Count == 0)
             {
-                ISegment currentSegment = State.Run[i];
-                Time splitTime = currentSegment.PersonalBestSplitTime;
-                if (splitTime[State.CurrentTimingMethod] != null)
+                return;
+            }
+
+            // check if there's a marked split
+            string marker = "🐸";  // TODO: allow user to change this in settings
+            for (int i = 0; i < numSplits; ++i)
+            {
+                string splitName = State.Run[i].Name;
+                if (splitName.EndsWith(marker))
                 {
-                    IsSplitting = true;
-                    SplitCounter = i + 1;
+                    MarkerIndex = i;
+                    State.Run[i].Name = splitName.Remove(splitName.Length - marker.Length);
                     break;
                 }
             }
-            if (IsSplitting)
-            {
-                Timer.SkipSplit();
-            }
-        }
 
-        protected void State_OnPause(object sender, EventArgs e)
+            // no marker
+            if ((MarkerIndex ?? 0) == 0)
+            {
+                return;
+            }
+            
+            // find the last run ID and delete the last attempt from history
+            int lastAttemptID = State.Run.AttemptHistory.Count;
+            AtomicDateTime? started = State.Run.AttemptHistory[lastAttemptID - 1].Started;
+            if (started.HasValue)
+            {
+                State.AttemptStarted = started.Value;
+            }
+            State.Run.AttemptHistory.RemoveAt(lastAttemptID - 1);
+            --State.Run.AttemptCount;
+            for (; lastAttemptID >= 1; --lastAttemptID)
+            {
+                if (State.Run[0].SegmentHistory.ContainsKey(lastAttemptID))
+                {
+                    break;
+                }
+            }
+
+            // copy time from the last attempt
+            while (State.CurrentSplitIndex < MarkerIndex)
+            {
+                Model.SkipSplit();
+                ISegment previousSplit = State.Run[State.CurrentSplitIndex - 1];
+                Time segmentTime = previousSplit.SegmentHistory[lastAttemptID];
+                // handle empty splits
+                if (segmentTime.RealTime == null && segmentTime.GameTime == null)
+                {
+                    previousSplit.SplitTime = segmentTime;
+                }
+                else
+                {
+                    TimeAccumulator += previousSplit.SegmentHistory[lastAttemptID];
+                    previousSplit.SplitTime = TimeAccumulator;
+                }
+                previousSplit.SegmentHistory.Remove(lastAttemptID);
+            }
+
+            TimeAccumulator = Time.Zero;
+        }
+        protected void State_OnSplit(object sender, EventArgs e)
         {
-            State.Run.Offset = State.TimePausedAt;
+            CurrentSplitIndex = State.CurrentSplitIndex;
         }
 
         protected void State_OnSkipSplit(object sender, EventArgs e)
         {
-            if (IsSplitting)
-            {
-                ISegment previousSplit = State.Run[State.CurrentSplitIndex - 1];
-                previousSplit.SplitTime = previousSplit.PersonalBestSplitTime;
-                --SplitCounter;
-                if (SplitCounter > 0)
-                    Timer.SkipSplit();
-                else
-                    IsSplitting = false;
-            }
-        }
-
-        protected void State_OnSplit(object sender, EventArgs e)
-        {
-            ISegment previousSplit = State.Run[State.CurrentSplitIndex - 1];
-            previousSplit.PersonalBestSplitTime = previousSplit.SplitTime;
+            CurrentSplitIndex = State.CurrentSplitIndex;
         }
 
         protected void State_OnUndoSplit(object sender, EventArgs e)
         {
-            ISegment nextSplit = State.Run[State.CurrentSplitIndex];
-            nextSplit.PersonalBestSplitTime = new Time();
+            CurrentSplitIndex = State.CurrentSplitIndex;
         }
+
+        protected void State_OnReset(object sender, TimerPhase e)
+        {
+            // save the current state
+            if (e == TimerPhase.Paused)
+            {
+                State.Run.Offset = State.TimePausedAt;
+                ISegment currentSplit = State.Run[CurrentSplitIndex];
+                currentSplit.Name += "🐸";
+            }  // restore the previous state
+            else if (MarkerIndex is int markerIndex)
+            {
+                ISegment splitToMark = State.Run[markerIndex];
+                splitToMark.Name += "🐸";
+            }
+        } 
     }
 }
